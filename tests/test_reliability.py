@@ -5,7 +5,7 @@ from pathlib import Path
 
 import requests
 
-from web_monitor import MonitorConfig, MonitorError, WebMonitor
+from web_monitor import MonitorConfig, MonitorError, SnapshotStore, WebMonitor
 
 
 class FakeResponse:
@@ -89,6 +89,21 @@ class ReliabilityTests(unittest.TestCase):
                 json.loads(state_path.read_text(encoding="utf-8"))["sha256"],
                 baseline_digest,
             )
+
+    def test_failed_atomic_replace_preserves_previous_output(self):
+        from unittest.mock import patch
+        from health import HealthRecord, HealthReporter
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "output.json"
+            writers = (lambda: SnapshotStore(str(path)).save_digest("a" * 64),
+                       lambda: HealthReporter(str(path)).write([HealthRecord("one", "baseline")]))
+            for write in writers:
+                path.write_text("previous output")
+                with self.subTest(write=write), patch.object(Path, "replace", side_effect=OSError):
+                    with self.assertRaises(MonitorError):
+                        write()
+                    self.assertEqual(path.read_text(), "previous output")
 
 
 if __name__ == "__main__":

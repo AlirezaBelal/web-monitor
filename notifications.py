@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import os
 from typing import Mapping, Optional
-from urllib.parse import urlparse
 
 import requests
 
-from web_monitor import ConfigurationError, MonitorConfig
+from web_monitor import ConfigurationError, MonitorConfig, validate_http_url
 
 
 class NotificationDeliveryError(RuntimeError):
@@ -29,7 +28,7 @@ class WebhookNotifier:
         timeout_seconds: float,
         session: Optional[requests.Session] = None,
     ) -> None:
-        self.url = _absolute_http_url(url, "webhook URL")
+        self.url = validate_http_url(url, "webhook URL")
         self.target_name = target_name
         self.timeout_seconds = timeout_seconds
         self.session = session or requests.Session()
@@ -166,11 +165,3 @@ def _required_environment_value(
             f"Required notification environment variable is not set: {variable_name}"
         )
     return value
-
-
-def _absolute_http_url(value: str, label: str) -> str:
-    url = value.strip()
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ConfigurationError(f"{label} must be an absolute HTTP(S) URL")
-    return url

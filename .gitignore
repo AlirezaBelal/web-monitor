@@ -20,4 +20,5 @@ previous_data.txt
 # Test / tooling artifacts
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/

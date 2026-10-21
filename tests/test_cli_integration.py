@@ -1,3 +1,4 @@
+import gzip
 import json
 import os
 import subprocess
@@ -39,7 +40,11 @@ class MutablePageHandler(BaseHTTPRequestHandler):
             return
 
         body = page_html.encode("utf-8")
+        if path == "/compressed":
+            body = gzip.compress(body)
         self.send_response(200)
+        if path == "/compressed":
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -274,6 +279,63 @@ class CliIntegrationTests(unittest.TestCase):
             statuses = {item["name"]: item["status"] for item in health["targets"]}
             self.assertEqual(statuses["alpha"], "error")
             self.assertEqual(statuses["beta"], "baseline")
+
+    def test_compressed_body_is_limited_after_decompression(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = self._write_single_config(Path(directory))
+            payload = json.loads(config_path.read_text())
+            payload["target_url"] = f"http://127.0.0.1:{self.server.server_port}/compressed"
+            payload["max_response_bytes"] = 1024
+            config_path.write_text(json.dumps(payload))
+            self.server.pages["/compressed"] = "<main>" + "x" * 2000 + "</main>"
+            result = self._run_once(config_path)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("size limit", result.stderr)
+            self.assertFalse(Path(payload["state_file"]).exists())
+
+    def test_console_example_needs_no_notification_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = json.loads((REPO_ROOT / "config.example.json").read_text())
+            self.assertEqual(len(payload["targets"]), 1)
+            target = payload["targets"][0]
+            self.assertEqual(target["notification"]["backend"], "console")
+            self.assertEqual(target["target_url"], "http://127.0.0.1:8000/")
+            target["target_url"] = f"http://127.0.0.1:{self.server.server_port}/single"
+            target["state_file"] = str(root / "state.json")
+            payload["health_file"] = str(root / "health.json")
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps(payload))
+            baseline = self._run_once(config_path)
+            self.assertEqual(baseline.returncode, 0, baseline.stderr)
+            self.assertIn("Status: baseline", baseline.stdout)
+            unchanged = self._run_once(config_path)
+            self.assertEqual(unchanged.returncode, 0, unchanged.stderr)
+            self.assertIn("Status: unchanged", unchanged.stdout)
+            self.server.pages["/single"] = "<main>Changed locally</main>"
+            changed = self._run_once(config_path)
+            self.assertEqual(changed.returncode, 0, changed.stderr)
+            self.assertIn("Status: changed", changed.stdout)
+            self.assertIn(target["notification"]["message"], changed.stdout)
+            self.assertEqual(self.server.webhook_events, [])
+
+    def test_malformed_urls_and_config_encoding_exit_cleanly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = self._write_single_config(Path(directory))
+            original = json.loads(config_path.read_text())
+            invalid_url = "https://[broken"
+            bad_target = dict(original, target_url=invalid_url)
+            bad_webhook = dict(original, notification={"backend": "webhook"})
+            for payload, environment in ((bad_target, {}),
+                                         (bad_webhook, {"WEBMONITOR_WEBHOOK_URL": invalid_url}),
+                                         (None, {})):
+                config_path.write_bytes(json.dumps(payload).encode() if payload else b"\xff")
+                result = self._run_once(config_path, environment)
+                with self.subTest(payload=payload):
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn("Configuration error:", result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
+                    self.assertNotIn(invalid_url, result.stderr)
 
 
 if __name__ == "__main__":
