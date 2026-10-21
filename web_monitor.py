@@ -65,12 +65,7 @@ class MonitorConfig:
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object]) -> "MonitorConfig":
         """Validate a single target mapping and create a typed config object."""
-        target_url = str(payload.get("target_url", "")).strip()
-        parsed_url = urlparse(target_url)
-        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
-            raise ConfigurationError("target_url must be an absolute HTTP(S) URL")
-        if parsed_url.username or parsed_url.password:
-            raise ConfigurationError("target_url must not include credentials")
+        target_url = validate_http_url(str(payload.get("target_url", "")), "target_url")
 
         css_selector = str(payload.get("css_selector", "")).strip()
         if not css_selector:
@@ -199,9 +194,30 @@ class MonitorSuiteConfig:
     check_interval_seconds: float
     health_file: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        self._validate_output_paths()
+
+    def _validate_output_paths(self, config_path: Optional[str] = None) -> None:
+        # Atomic writers also use <filename>.tmp; reserve both paths for each output.
+        reserved = {Path(config_path).resolve()} if config_path is not None else set()
+        paths = [target.state_file for target in self.targets]
+        if self.health_file is not None:
+            paths.append(self.health_file)
+        for value in paths:
+            try:
+                path = Path(value)
+                output_paths = {path.resolve(), path.with_name(path.name + ".tmp").resolve()}
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise ConfigurationError("State and health paths must be valid file paths") from exc
+            if reserved & output_paths:
+                raise ConfigurationError("State, health, and configuration paths must not overlap")
+            reserved.update(output_paths)
+
     @classmethod
     def from_file(cls, path: str) -> "MonitorSuiteConfig":
-        return cls.from_mapping(_load_json_mapping(path))
+        suite = cls.from_mapping(_load_json_mapping(path))
+        suite._validate_output_paths(config_path=path)
+        return suite
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, object]) -> "MonitorSuiteConfig":
@@ -245,7 +261,6 @@ class MonitorSuiteConfig:
 
         targets = []
         names = set()
-        state_files = set()
         for raw_target in raw_targets:
             if not isinstance(raw_target, Mapping):
                 raise ConfigurationError("each target must be a JSON object")
@@ -273,16 +288,7 @@ class MonitorSuiteConfig:
             merged.setdefault("state_file", f".webmonitor/{name}.json")
 
             target = MonitorConfig.from_mapping(merged)
-            normalized_state = str(Path(target.state_file))
-            if normalized_state in state_files:
-                raise ConfigurationError(
-                    f"multiple targets cannot share state_file: {normalized_state}"
-                )
-            state_files.add(normalized_state)
             targets.append(target)
-
-        if health_file is not None and str(Path(health_file)) in state_files:
-            raise ConfigurationError("health_file cannot be the same as a target state_file")
 
         return cls(
             targets=tuple(targets),
@@ -313,7 +319,7 @@ class SnapshotStore:
 
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise MonitorError("Unable to read monitor state") from exc
 
         if not isinstance(payload, Mapping):
@@ -382,6 +388,7 @@ class WebMonitor:
 
         for attempt in range(1, self.config.max_attempts + 1):
             attempts_used = attempt
+            response = None
             try:
                 response = self.session.get(
                     self.config.target_url,
@@ -392,6 +399,8 @@ class WebMonitor:
                 response.raise_for_status()
                 return response
             except requests.RequestException as exc:
+                if response is not None:
+                    response.close()
                 last_exception = exc
                 status_code = getattr(getattr(exc, "response", None), "status_code", None)
                 retryable = status_code is None or status_code in RETRYABLE_STATUS_CODES
@@ -414,17 +423,17 @@ class WebMonitor:
 
     def _read_limited_response_text(self, response: requests.Response) -> str:
         """Read a streamed response without allowing unbounded memory growth."""
-        declared_length = response.headers.get("Content-Length")
-        if declared_length:
-            try:
-                if int(declared_length) > self.config.max_response_bytes:
-                    raise MonitorError("HTTP response exceeded configured size limit")
-            except ValueError:
-                pass
-
         chunks: list[bytes] = []
         total_bytes = 0
         try:
+            declared_length = response.headers.get("Content-Length")
+            if declared_length:
+                try:
+                    if int(declared_length) > self.config.max_response_bytes:
+                        raise MonitorError("HTTP response exceeded configured size limit")
+                except ValueError:
+                    pass
+
             for chunk in response.iter_content(chunk_size=65_536):
                 if not chunk:
                     continue
@@ -432,13 +441,16 @@ class WebMonitor:
                 if total_bytes > self.config.max_response_bytes:
                     raise MonitorError("HTTP response exceeded configured size limit")
                 chunks.append(chunk)
+
+            encoding = response.encoding or "utf-8"
+            try:
+                return b"".join(chunks).decode(encoding, errors="replace")
+            except (LookupError, UnicodeError) as exc:
+                raise MonitorError("HTTP response encoding is invalid") from exc
         except requests.RequestException as exc:
             raise MonitorError("HTTP response body could not be read") from exc
         finally:
             response.close()
-
-        encoding = response.encoding or "utf-8"
-        return b"".join(chunks).decode(encoding, errors="replace")
 
     def fetch_digest(self) -> tuple[str, int]:
         """Fetch the page, extract configured content, and return its digest."""
@@ -491,13 +503,29 @@ class WebMonitor:
         return CheckResult(status="changed", matched_elements=matched_elements)
 
 
+def validate_http_url(value: str, label: str) -> str:
+    """Validate a credential-free HTTP(S) URL without echoing its value in errors."""
+    url = value.strip()
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+        parsed.port  # Accessing the port validates its numeric form and range.
+    except ValueError as exc:
+        raise ConfigurationError(f"{label} must be an absolute HTTP(S) URL") from exc
+    if parsed.scheme not in {"http", "https"} or not host:
+        raise ConfigurationError(f"{label} must be an absolute HTTP(S) URL")
+    if parsed.username is not None or parsed.password is not None:
+        raise ConfigurationError(f"{label} must not include credentials")
+    return url
+
+
 def _load_json_mapping(path: str) -> Mapping[str, object]:
     try:
         with open(path, "r", encoding="utf-8") as config_file:
             payload = json.load(config_file)
     except FileNotFoundError:
         raise
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ConfigurationError("Unable to read configuration file") from exc
 
     if not isinstance(payload, Mapping):

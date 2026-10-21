@@ -21,6 +21,7 @@ class FakeResponse:
         self.status_code = status_code
         self.headers = headers or {}
         self.encoding = "utf-8"
+        self.closed = False
 
     def iter_content(self, chunk_size=65536):
         payload = self.text.encode(self.encoding)
@@ -28,7 +29,7 @@ class FakeResponse:
             yield payload[start : start + chunk_size]
 
     def close(self):
-        return None
+        self.closed = True
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -297,8 +298,10 @@ class WebMonitorTests(unittest.TestCase):
                 sleeper=sleeps.append,
             )
 
+            responses = list(session.responses)
             result = monitor.check_once()
 
+            self.assertTrue(all(response.closed for response in responses))
             self.assertEqual(result.status, "baseline")
             self.assertEqual(len(session.calls), 3)
             self.assertEqual(sleeps, [0.5, 1.0])
@@ -322,9 +325,11 @@ class WebMonitorTests(unittest.TestCase):
                 sleeper=sleeps.append,
             )
 
+            failed_response = session.responses[0]
             with self.assertRaises(MonitorError) as context:
                 monitor.check_once()
 
+            self.assertTrue(failed_response.closed)
             self.assertEqual(len(session.calls), 1)
             self.assertEqual(sleeps, [])
             self.assertIn("404", str(context.exception))
@@ -428,9 +433,11 @@ class WebMonitorTests(unittest.TestCase):
                 session=session,
             )
 
+            response = session.responses[0]
             with self.assertRaises(MonitorError) as context:
                 monitor.check_once()
 
+            self.assertTrue(response.closed)
             self.assertIn("size limit", str(context.exception))
 
     def test_streamed_response_is_bounded_even_without_content_length(self):
@@ -444,10 +451,57 @@ class WebMonitorTests(unittest.TestCase):
                 session=session,
             )
 
+            response = session.responses[0]
             with self.assertRaises(MonitorError) as context:
                 monitor.check_once()
 
+            self.assertTrue(response.closed)
             self.assertIn("size limit", str(context.exception))
+
+    def test_body_failures_close_response_and_preserve_baseline(self):
+        from unittest.mock import Mock
+
+        for failure in (requests.ConnectionError("private response"),
+                        requests.exceptions.ChunkedEncodingError("private response")):
+            response = FakeResponse("")
+            def chunks():
+                yield b""
+                yield b"<main>partial"
+                raise failure
+            response.iter_content = lambda **kwargs: chunks()
+            store = Mock()
+            monitor = WebMonitor(self._config("unused"),
+                                 session=FakeSession([response]), store=store)
+            with self.subTest(failure=type(failure)), self.assertRaises(MonitorError) as error:
+                monitor.check_once()
+            self.assertTrue(response.closed)
+            self.assertNotIn("private response", str(error.exception))
+            store.save_digest.assert_not_called()
+
+    def test_invalid_charset_isolated_from_next_target(self):
+        import contextlib
+        import io
+        from unittest.mock import Mock
+        from main import run_checks
+
+        for encoding in ("unknown-test-charset", "base64_codec"):
+            response = FakeResponse("")
+            response.encoding = encoding
+            response.iter_content = lambda **kwargs: iter([b"<div class='item'>private</div>"])
+            broken = WebMonitor(self._config("unused"),
+                                session=FakeSession([response]), store=Mock())
+            healthy = WebMonitor(self._config("unused", name="healthy"),
+                                 session=FakeSession([FakeResponse('<div class="item">ok</div>')]),
+                                 store=Mock(load_digest=Mock(return_value=None)))
+            stderr = io.StringIO()
+            with self.subTest(encoding=encoding), contextlib.redirect_stderr(stderr), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                failures, records = run_checks([broken, healthy], True)
+            self.assertEqual(failures, 1)
+            self.assertEqual([record.status for record in records], ["error", "baseline"])
+            self.assertTrue(response.closed)
+            self.assertNotIn("private", stderr.getvalue())
+            self.assertNotIn(broken.config.target_url, stderr.getvalue())
 
     def test_request_timeout_and_user_agent_are_applied(self):
         with tempfile.TemporaryDirectory() as temp_dir:

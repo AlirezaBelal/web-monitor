@@ -10,12 +10,6 @@ Web Monitor turns repeated manual page checks into a small operational workflow:
 
 It supports multiple independent targets in one process, console/desktop/Webhook/Telegram notifications, privacy-safe health output, Docker deployment, and a hardened systemd service example.
 
-## Product / automation context
-
-Many operational workflows begin with someone repeatedly opening one or more pages to check whether a relevant section changed. Web Monitor replaces that repetitive task with an explicit, inspectable workflow while keeping the monitored scope narrow through CSS selectors.
-
-The first successful check establishes a baseline and does not send a false-positive alert. Later checks compare only SHA-256 digests. Scraped page content is processed in memory and is not written to state or health files.
-
 ## Core capabilities
 
 - one or many monitored targets per process
@@ -38,34 +32,6 @@ The first successful check establishes a baseline and does not send a false-posi
 - real localhost CLI end-to-end tests
 - Docker and systemd deployment examples
 - GitHub Actions across Python 3.10–3.14 with dependency auditing
-
-## Processing flow
-
-```text
-Target A ─┐
-Target B ─┼─> GET + retry/backoff
-Target N ─┘          │
-                     v
-               CSS selection
-                     │
-                     v
-             text/html normalize
-                     │
-                     v
-                 SHA-256
-                     │
-             compare with state
-              /      |       \
-       baseline   unchanged   changed
-          |           |          |
-       save state    no alert   notify
-                                 |
-                          success? ── no ─> keep old state
-                                 |
-                                yes
-                                 |
-                            save new state
-```
 
 ## Quick start
 
@@ -95,10 +61,18 @@ Install core dependencies:
 python -m pip install -r requirements.txt
 ```
 
-Create local configuration:
+Create local configuration (the example uses console notifications and needs no secrets):
 
 ```bash
-cp config.example.json config.json
+python -c "import shutil; shutil.copyfile('config.example.json', 'config.json')"
+```
+
+The example watches `http://127.0.0.1:8000/`. For a safe local demo, create a
+`demo` directory containing an `index.html` file with `<main>Initial value</main>`.
+In a second terminal, serve only that directory on loopback:
+
+```bash
+python -m http.server 8000 --bind 127.0.0.1 --directory demo
 ```
 
 Validate it without making a network request:
@@ -107,11 +81,18 @@ Validate it without making a network request:
 python main.py --config config.json --validate-config
 ```
 
-Run all configured targets once:
+Validation checks configuration structure, not reachability or notification credentials.
+
+Run the configured target once:
 
 ```bash
 python main.py --config config.json --once
 ```
+
+The first successful check prints `baseline` without notifying. Run `--once` again
+to see `unchanged`. Edit the text in `demo/index.html`, then run `--once` to see
+`changed` and a console alert. For real monitoring, replace the loopback URL and
+selector in your local config with an authorized target.
 
 Start continuous monitoring:
 
@@ -134,8 +115,8 @@ python main.py --config config.json
   "targets": [
     {
       "name": "homepage",
-      "target_url": "https://example.com/",
-      "css_selector": "body",
+      "target_url": "http://127.0.0.1:8000/",
+      "css_selector": "main",
       "comparison_mode": "text",
       "notification": {
         "backend": "console",
@@ -147,7 +128,8 @@ python main.py --config config.json
 }
 ```
 
-Each multi-target entry requires a unique safe `name`. If `state_file` is omitted, Web Monitor derives `.webmonitor/<name>.json`. Multiple targets cannot share the same state file.
+Each multi-target entry requires a unique safe `name`. If `state_file` is omitted, Web Monitor derives `.webmonitor/<name>.json`. State and health output paths, including their `.tmp` write paths, must not overlap each other or the configuration file.
+Relative paths are resolved from the working directory. Run only one process per state directory.
 
 The legacy single-target format remains supported.
 
@@ -333,6 +315,10 @@ A typical Linux installation uses:
 - secrets in `/etc/webmonitor/webmonitor.env`
 - state and health output in `/var/lib/webmonitor`
 
+Create the dedicated `webmonitor` user/group and install dependencies into
+`/opt/webmonitor/.venv` before enabling the unit. Protect the real environment file
+with mode `0600`; systemd reads it before dropping privileges.
+
 The service runs as a dedicated `webmonitor` user, uses `StateDirectory=webmonitor`, restarts on failure, applies a restrictive umask, and enables several systemd sandboxing controls.
 
 After adapting the example files:
@@ -436,41 +422,19 @@ Web Monitor remains intentionally focused:
 
 These are explicit product boundaries rather than capabilities claimed by the current implementation.
 
-## Repository structure
-
-```text
-.
-├── main.py
-├── web_monitor.py
-├── notifications.py
-├── health.py
-├── config.example.json
-├── requirements.txt
-├── requirements-desktop.txt
-├── Dockerfile
-├── .dockerignore
-├── SECURITY.md
-├── LICENSE
-├── deploy/
-│   ├── webmonitor.service
-│   ├── config.systemd.example.json
-│   ├── config.container.example.json
-│   └── webmonitor.env.example
-├── tests/
-└── .github/
-    ├── dependabot.yml
-    └── workflows/
-        └── ci.yml
-```
-
 ## License
 
 Released under the [MIT License](LICENSE).
 
-## Portfolio
-
-For broader product, data, and automation work, see **[alirezabelal.github.io](https://alirezabelal.github.io/)**.
-
 ## HTTP response resource boundary
 
-Each target has a configurable `max_response_bytes` limit (default `2000000`). Responses are requested in streaming mode and rejected if the declared or observed body size exceeds that limit. This prevents a monitored endpoint from causing unbounded response buffering before HTML selection and hashing.
+`max_response_bytes` defaults to `2000000` (allowed: `1024`–`50000000`). Both the
+declared Content-Length and observed streamed body are checked. Requests decompresses
+compressed bodies before the observed-byte check. This bounds retained body data,
+not total process memory: decoding, decompression, HTML parsing, and hashing need
+additional memory. It is not a sandbox for hostile endpoints.
+
+Responses are closed on success, HTTP rejection, size rejection, and body-read
+failure. Unknown or non-text charsets fail that target with a controlled error;
+other targets continue. HTTP timeouts apply to connect/read inactivity, not an
+absolute deadline for the complete monitoring cycle.

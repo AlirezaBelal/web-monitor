@@ -8,26 +8,13 @@
   "targets": [
     {
       "name": "homepage",
-      "target_url": "https://example.com/",
-      "css_selector": "body",
+      "target_url": "http://127.0.0.1:8000/",
+      "css_selector": "main",
       "comparison_mode": "text",
       "notification": {
         "backend": "console",
         "title": "WebMonitor change detected",
-        "message": "Homepage content changed."
-      }
-    },
-    {
-      "name": "docs",
-      "target_url": "https://example.com/docs",
-      "css_selector": "main",
-      "comparison_mode": "html",
-      "max_attempts": 2,
-      "notification": {
-        "backend": "webhook",
-        "webhook_url_env": "WEBMONITOR_WEBHOOK_URL",
-        "title": "WebMonitor change detected",
-        "message": "Documentation content changed."
+        "message": "Selected webpage content changed."
       }
     }
   ],

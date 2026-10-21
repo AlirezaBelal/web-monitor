@@ -1,0 +1,4 @@
+[run]
+source = web_monitor, notifications, health, main
+patch = subprocess
+parallel = true

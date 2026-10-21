@@ -70,14 +70,16 @@ jobs:
       - name: Install quality tooling
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt coverage ruff
+          python -m pip install -r requirements.txt "coverage>=7.10" ruff
 
       - name: Run Ruff correctness checks
         run: ruff check --select E9,F63,F7,F82 .
 
       - name: Enforce test coverage
         run: |
-          coverage run --source=web_monitor,notifications,health,main -m unittest discover -s tests -v
+          coverage erase
+          coverage run -m unittest discover -s tests -v
+          coverage combine
           coverage report --show-missing --fail-under=80
 
   security-audit:
