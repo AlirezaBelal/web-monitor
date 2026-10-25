@@ -17,6 +17,9 @@ import requests
 
 
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+MAX_TARGETS = 64
+MAX_CONFIG_BYTES = 1_048_576
+MAX_STATE_BYTES = 16_384
 _TARGET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -233,6 +236,8 @@ class MonitorSuiteConfig:
 
         if not isinstance(raw_targets, list) or not raw_targets:
             raise ConfigurationError("targets must be a non-empty JSON array")
+        if len(raw_targets) > MAX_TARGETS:
+            raise ConfigurationError(f"At most {MAX_TARGETS} targets are allowed")
 
         shared_interval = _positive_float(
             payload.get("check_interval_seconds", 300),
@@ -318,7 +323,11 @@ class SnapshotStore:
             return None
 
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            with self.path.open("rb") as state_file:
+                state_bytes = state_file.read(MAX_STATE_BYTES + 1)
+            if len(state_bytes) > MAX_STATE_BYTES:
+                raise MonitorError("Monitor state exceeds size limit")
+            payload = json.loads(state_bytes.decode("utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise MonitorError("Unable to read monitor state") from exc
 
@@ -395,8 +404,17 @@ class WebMonitor:
                     headers={"User-Agent": self.config.user_agent},
                     timeout=self.config.request_timeout_seconds,
                     stream=True,
+                    allow_redirects=False,
                 )
                 response.raise_for_status()
+                if not 200 <= response.status_code < 300:
+                    # A monitored page may redirect to a different host or
+                    # private network. Require the operator to configure the
+                    # intended destination explicitly.
+                    response.close()
+                    raise MonitorError(
+                        "HTTP redirect or non-success status; configure the final target URL"
+                    )
                 return response
             except requests.RequestException as exc:
                 if response is not None:
@@ -521,8 +539,11 @@ def validate_http_url(value: str, label: str) -> str:
 
 def _load_json_mapping(path: str) -> Mapping[str, object]:
     try:
-        with open(path, "r", encoding="utf-8") as config_file:
-            payload = json.load(config_file)
+        with open(path, "rb") as config_file:
+            config_bytes = config_file.read(MAX_CONFIG_BYTES + 1)
+        if len(config_bytes) > MAX_CONFIG_BYTES:
+            raise ConfigurationError("Configuration file exceeds size limit")
+        payload = json.loads(config_bytes.decode("utf-8"))
     except FileNotFoundError:
         raise
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:

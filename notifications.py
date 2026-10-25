@@ -45,8 +45,11 @@ class WebhookNotifier:
                 self.url,
                 json=payload,
                 timeout=self.timeout_seconds,
+                allow_redirects=False,
             )
             response.raise_for_status()
+            if not 200 <= response.status_code < 300:
+                raise NotificationDeliveryError("Webhook notification delivery failed")
         except requests.RequestException as exc:
             raise NotificationDeliveryError(
                 "Webhook notification delivery failed"
@@ -84,8 +87,17 @@ class TelegramNotifier:
                 self._url,
                 json={"chat_id": self.chat_id, "text": text},
                 timeout=self.timeout_seconds,
+                allow_redirects=False,
             )
             response.raise_for_status()
+            if not 200 <= response.status_code < 300:
+                raise NotificationDeliveryError("Telegram notification delivery failed")
+            try:
+                accepted = response.json().get("ok") is True
+            except (ValueError, AttributeError, TypeError):
+                accepted = False
+            if not accepted:
+                raise NotificationDeliveryError("Telegram notification delivery failed")
         except requests.RequestException as exc:
             # Never include the request URL because it contains the bot token.
             raise NotificationDeliveryError(

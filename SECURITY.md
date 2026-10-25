@@ -22,11 +22,11 @@ Target state files store only SHA-256 identifiers. Scraped webpage content is no
 
 Optional health output contains target names, statuses, matched-element counts, and controlled error messages. It intentionally excludes target URLs, CSS selectors, scraped content, Webhook destinations, and notification credentials.
 
-The `.webmonitor/` directory and local environment files are ignored by Git.
+The `.webmonitor/` directory and local environment files are ignored by Git. The configuration reader enforces a 1 MiB size limit, persisted state readers a 16 KiB limit, and multi-target suites accept at most 64 targets. These limits prevent accidental unbounded reads, but they do not make hostile HTML safe to parse or restrict which networks an authorized operator can reach.
 
 ## Notification reliability
 
-On a detected change, notification delivery occurs before the changed digest is committed. If delivery fails, the old digest remains active so the change can be attempted again during the next check.
+On a detected change, notification delivery occurs before the changed digest is committed. HTTP redirects are not followed when delivering Webhook/Telegram alerts, and a redirect or other non-2xx status is not treated as delivery. Telegram additionally must acknowledge the call with `"ok": true`. If delivery fails, the old digest remains active so the change can be attempted again during the next check.
 
 Notification delivery errors are intentionally generic. In particular, Telegram failures do not print the request URL because the bot token is embedded in that URL.
 
@@ -34,7 +34,7 @@ Notification delivery errors are intentionally generic. In particular, Telegram 
 
 Configured monitoring targets and Webhook destinations must be absolute HTTP(S) URLs. Operators should prefer HTTPS Webhooks outside local development.
 
-Monitoring requests use explicit timeouts and bounded retry/backoff. Operators are responsible for monitoring only pages they are authorized to access and for selecting intervals consistent with target-site terms and acceptable-use policies.
+Monitoring requests do not follow HTTP redirects: operators must configure the intended final URL, so remote sites cannot transparently direct the monitor to an unexpected host or private-network resource. Monitoring requests use explicit timeouts and bounded retry/backoff. Operators are responsible for monitoring only pages they are authorized to access and for selecting intervals consistent with target-site terms and acceptable-use policies.
 
 ## Deployment hardening
 

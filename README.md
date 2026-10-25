@@ -128,6 +128,10 @@ python main.py --config config.json
 }
 ```
 
+At most **64 targets** are allowed per process. JSON configuration input is
+limited to **1 MiB**, and each persisted digest state file to **16 KiB**;
+oversized files fail with controlled errors rather than being fully loaded.
+
 Each multi-target entry requires a unique safe `name`. If `state_file` is omitted, Web Monitor derives `.webmonitor/<name>.json`. State and health output paths, including their `.tmp` write paths, must not overlap each other or the configuration file.
 Relative paths are resolved from the working directory. Run only one process per state directory.
 
@@ -147,7 +151,7 @@ The legacy single-target format remains supported.
 backoff_seconds × 2^(attempt - 1)
 ```
 
-Transient network errors and HTTP `429`, `500`, `502`, `503`, and `504` are retried. Non-retryable HTTP failures such as `404` stop immediately.
+Transient network errors and HTTP `429`, `500`, `502`, `503`, and `504` are retried. Non-retryable HTTP failures such as `404` stop immediately. **Page redirects are deliberately not followed**: if the target returns HTTP 3xx, configure its final HTTP(S) URL explicitly instead. This prevents an authorized URL from silently redirecting the monitor to an unexpected host or private-network resource.
 
 In multi-target mode, a failed target is reported as an error while the remaining targets continue to run. `--once` exits with status `1` if any target check or configured health write fails.
 
@@ -225,7 +229,7 @@ Set the real bot token and chat ID only in the runtime environment or a protecte
 
 ### Alert delivery semantics
 
-On a detected change, Web Monitor sends the alert **before** committing the new digest. If delivery fails, the old digest remains active and the same change is retried on the next check.
+On a detected change, Web Monitor sends the alert **before** committing the new digest. Only HTTP **2xx** responses count as successful Webhook delivery; Webhook and Telegram notifications do **not** follow redirects. Telegram must also return an API acknowledgement with `"ok": true`. If delivery fails, the old digest remains active and the same change is retried on the next check.
 
 This favors at-least-once notification delivery: a rare failure after the remote alert succeeds but before local state persistence can produce a duplicate alert, but a transient notification outage does not silently lose the change.
 
