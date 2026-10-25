@@ -404,8 +404,17 @@ class WebMonitor:
                     headers={"User-Agent": self.config.user_agent},
                     timeout=self.config.request_timeout_seconds,
                     stream=True,
+                    allow_redirects=False,
                 )
                 response.raise_for_status()
+                if not 200 <= response.status_code < 300:
+                    # A monitored page may redirect to a different host or
+                    # private network. Require the operator to configure the
+                    # intended destination explicitly.
+                    response.close()
+                    raise MonitorError(
+                        "HTTP redirect or non-success status; configure the final target URL"
+                    )
                 return response
             except requests.RequestException as exc:
                 if response is not None:

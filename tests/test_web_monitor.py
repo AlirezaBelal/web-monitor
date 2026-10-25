@@ -306,6 +306,20 @@ class WebMonitorTests(unittest.TestCase):
             self.assertEqual(len(session.calls), 3)
             self.assertEqual(sleeps, [0.5, 1.0])
 
+    def test_monitored_url_redirect_is_not_followed_or_saved(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "state.json"
+            response = FakeResponse("", status_code=302)
+            session = FakeSession([response])
+            monitor = WebMonitor(self._config(str(path)), session=session)
+            with self.assertRaisesRegex(MonitorError, "redirect") as context:
+                monitor.check_once()
+            self.assertNotIn(monitor.config.target_url, str(context.exception))
+            self.assertTrue(response.closed)
+            self.assertFalse(path.exists())
+            self.assertEqual(len(session.calls), 1)
+            self.assertEqual(session.calls[0][1]["allow_redirects"], False)
+
     def test_non_retryable_http_status_fails_immediately(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             sleeps = []

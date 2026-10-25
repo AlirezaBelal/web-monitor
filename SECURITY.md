@@ -34,7 +34,7 @@ Notification delivery errors are intentionally generic. In particular, Telegram 
 
 Configured monitoring targets and Webhook destinations must be absolute HTTP(S) URLs. Operators should prefer HTTPS Webhooks outside local development.
 
-Monitoring requests use explicit timeouts and bounded retry/backoff. Operators are responsible for monitoring only pages they are authorized to access and for selecting intervals consistent with target-site terms and acceptable-use policies.
+Monitoring requests do not follow HTTP redirects: operators must configure the intended final URL, so remote sites cannot transparently direct the monitor to an unexpected host or private-network resource. Monitoring requests use explicit timeouts and bounded retry/backoff. Operators are responsible for monitoring only pages they are authorized to access and for selecting intervals consistent with target-site terms and acceptable-use policies.
 
 ## Deployment hardening
 
