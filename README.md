@@ -128,6 +128,10 @@ python main.py --config config.json
 }
 ```
 
+At most **64 targets** are allowed per process. JSON configuration input is
+limited to **1 MiB**, and each persisted digest state file to **16 KiB**;
+oversized files fail with controlled errors rather than being fully loaded.
+
 Each multi-target entry requires a unique safe `name`. If `state_file` is omitted, Web Monitor derives `.webmonitor/<name>.json`. State and health output paths, including their `.tmp` write paths, must not overlap each other or the configuration file.
 Relative paths are resolved from the working directory. Run only one process per state directory.
 
@@ -225,7 +229,7 @@ Set the real bot token and chat ID only in the runtime environment or a protecte
 
 ### Alert delivery semantics
 
-On a detected change, Web Monitor sends the alert **before** committing the new digest. If delivery fails, the old digest remains active and the same change is retried on the next check.
+On a detected change, Web Monitor sends the alert **before** committing the new digest. Only HTTP **2xx** responses count as successful Webhook delivery; Webhook and Telegram notifications do **not** follow redirects. Telegram must also return an API acknowledgement with `"ok": true`. If delivery fails, the old digest remains active and the same change is retried on the next check.
 
 This favors at-least-once notification delivery: a rare failure after the remote alert succeeds but before local state persistence can produce a duplicate alert, but a transient notification outage does not silently lose the change.
 

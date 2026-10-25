@@ -12,8 +12,12 @@ from web_monitor import ConfigurationError, MonitorConfig
 
 
 class FakeResponse:
-    def __init__(self, status_code=204):
+    def __init__(self, status_code=204, accepted=True):
         self.status_code = status_code
+        self.accepted = accepted
+
+    def json(self):
+        return {"ok": self.accepted}
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -112,6 +116,37 @@ class NotificationTests(unittest.TestCase):
             session.calls[0][0],
             "https://hooks.example.test/change",
         )
+
+
+    def test_redirects_and_non_success_http_statuses_cannot_acknowledge_notifications(self):
+        for backend in ("webhook", "telegram"):
+            for status in (301, 302, 307, 308):
+                session = FakePostSession([FakeResponse(status_code=status)])
+                notifier = (
+                    WebhookNotifier("https://hooks.example.test/change", "docs", 2, session)
+                    if backend == "webhook"
+                    else TelegramNotifier("synthetic-bot-secret", "123", "docs", 2, session)
+                )
+                with self.subTest(backend=backend, status=status), self.assertRaises(
+                    NotificationDeliveryError
+                ) as context:
+                    notifier("Changed", "new snapshot")
+                self.assertEqual(session.calls[0][1]["allow_redirects"], False)
+                self.assertNotIn("synthetic-bot-secret", str(context.exception))
+
+    def test_telegram_requires_positive_api_acknowledgement(self):
+        for accepted in (False, None):
+            session = FakePostSession([FakeResponse(status_code=200, accepted=accepted)])
+            notifier = TelegramNotifier("synthetic-secret", "123", "docs", 2, session)
+            with self.subTest(accepted=accepted), self.assertRaises(
+                NotificationDeliveryError
+            ):
+                notifier("Changed", "new snapshot")
+
+        session = FakePostSession([FakeResponse(status_code=200, accepted=True)])
+        notifier = TelegramNotifier("synthetic-secret", "123", "docs", 2, session)
+        notifier("Changed", "new snapshot")
+        self.assertEqual(session.calls[0][1]["allow_redirects"], False)
 
     def test_missing_notification_secret_fails_configuration_without_secret_value(self):
         config = config_with_backend(

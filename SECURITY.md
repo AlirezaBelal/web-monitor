@@ -22,11 +22,11 @@ Target state files store only SHA-256 identifiers. Scraped webpage content is no
 
 Optional health output contains target names, statuses, matched-element counts, and controlled error messages. It intentionally excludes target URLs, CSS selectors, scraped content, Webhook destinations, and notification credentials.
 
-The `.webmonitor/` directory and local environment files are ignored by Git.
+The `.webmonitor/` directory and local environment files are ignored by Git. The configuration reader enforces a 1 MiB size limit, persisted state readers a 16 KiB limit, and multi-target suites accept at most 64 targets. These limits prevent accidental unbounded reads, but they do not make hostile HTML safe to parse or restrict which networks an authorized operator can reach.
 
 ## Notification reliability
 
-On a detected change, notification delivery occurs before the changed digest is committed. If delivery fails, the old digest remains active so the change can be attempted again during the next check.
+On a detected change, notification delivery occurs before the changed digest is committed. HTTP redirects are not followed when delivering Webhook/Telegram alerts, and a redirect or other non-2xx status is not treated as delivery. Telegram additionally must acknowledge the call with `"ok": true`. If delivery fails, the old digest remains active so the change can be attempted again during the next check.
 
 Notification delivery errors are intentionally generic. In particular, Telegram failures do not print the request URL because the bot token is embedded in that URL.
 

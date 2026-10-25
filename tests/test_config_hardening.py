@@ -63,6 +63,40 @@ class ConfigHardeningTests(unittest.TestCase):
                     MonitorSuiteConfig.from_mapping({"targets": [target,
                         dict(target, name="two", state_file=other_state)]})
 
+
+    def test_configuration_and_snapshot_files_have_bounded_reads(self):
+        from web_monitor import MAX_CONFIG_BYTES, MAX_STATE_BYTES
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            original = {"target_url": "https://example.com/", "css_selector": "main"}
+            path.write_text(__import__("json").dumps(original))
+            self.assertEqual(
+                MonitorSuiteConfig.from_file(str(path)).targets[0].css_selector, "main"
+            )
+
+            path.write_bytes(b" " * (MAX_CONFIG_BYTES + 1))
+            with self.assertRaisesRegex(ConfigurationError, "size limit"):
+                MonitorSuiteConfig.from_file(str(path))
+
+            state = Path(directory) / "state.json"
+            state.write_bytes(b" " * (MAX_STATE_BYTES + 1))
+            with self.assertRaisesRegex(MonitorError, "size limit"):
+                SnapshotStore(str(state)).load_digest()
+
+    def test_multi_target_count_is_bounded(self):
+        from web_monitor import MAX_TARGETS
+
+        def payload(count):
+            return {"targets": [
+                {"name": f"target-{i}", "target_url": "https://example.com/",
+                 "css_selector": "main"}
+                for i in range(count)
+            ]}
+        self.assertEqual(len(MonitorSuiteConfig.from_mapping(payload(MAX_TARGETS)).targets), MAX_TARGETS)
+        with self.assertRaisesRegex(ConfigurationError, "At most 64 targets"):
+            MonitorSuiteConfig.from_mapping(payload(MAX_TARGETS + 1))
+
     def test_output_cannot_overwrite_source_configuration(self):
         import json
 
