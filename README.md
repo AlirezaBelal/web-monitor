@@ -442,3 +442,9 @@ Responses are closed on success, HTTP rejection, size rejection, and body-read
 failure. Unknown or non-text charsets fail that target with a controlled error;
 other targets continue. HTTP timeouts apply to connect/read inactivity, not an
 absolute deadline for the complete monitoring cycle.
+
+## Live browser demo
+
+[Open the GitHub Pages demo](https://alirezabelal.github.io/web-monitor/)
+
+This deterministic browser simulator demonstrates content-change detection, retry behavior, health states, and alert semantics using fixed fixtures. It makes no monitoring requests, schedules no checks, and sends no notifications.
