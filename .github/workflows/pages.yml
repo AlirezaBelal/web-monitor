@@ -1,26 +1,42 @@
 name: GitHub Pages
-
 on:
   push:
     branches: [master]
-    paths: ['docs/**', 'tests/browser_demo.test.cjs', '.github/workflows/pages.yml']
+    paths: ['docs/**', 'tests/browser_demo.test.cjs', 'scripts/qa-browser.mjs', '.github/workflows/pages.yml']
   pull_request:
     branches: [master]
-    paths: ['docs/**', 'tests/browser_demo.test.cjs', '.github/workflows/pages.yml']
+    paths: ['docs/**', 'tests/browser_demo.test.cjs', 'scripts/qa-browser.mjs', '.github/workflows/pages.yml']
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   verify:
+    name: Browser interaction and accessibility
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
       - run: node --test tests/browser_demo.test.cjs
+      - name: Install isolated browser tooling
+        run: |
+          mkdir -p "$RUNNER_TEMP/monitor-qa"
+          cp scripts/qa-browser.mjs "$RUNNER_TEMP/monitor-qa/run.mjs"
+          npm install --prefix "$RUNNER_TEMP/monitor-qa" --no-save --package-lock=false playwright@1.56.1 @axe-core/playwright@4.10.2
+          "$RUNNER_TEMP/monitor-qa/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Test real Chromium at seven viewports
+        run: node "$RUNNER_TEMP/monitor-qa/run.mjs"
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: monitor-browser-qa
+          path: evidence/
+          retention-days: 14
   deploy:
     if: github.event_name != 'pull_request'
     needs: verify
@@ -33,7 +49,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/configure-pages@v5
         with:
           enablement: true
@@ -43,4 +61,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-

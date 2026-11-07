@@ -120,9 +120,9 @@ class MonitorConfig:
         if not isinstance(notification, Mapping):
             raise ConfigurationError("notification must be a JSON object")
 
-        notification_backend = str(
-            notification.get("backend", "console")
-        ).strip().lower()
+        notification_backend = (
+            str(notification.get("backend", "console")).strip().lower()
+        )
         if notification_backend not in {"console", "desktop", "webhook", "telegram"}:
             raise ConfigurationError(
                 "notification.backend must be console, desktop, webhook, or telegram"
@@ -137,9 +137,7 @@ class MonitorConfig:
             "notification.webhook_url_env",
         )
         telegram_token_env = _environment_variable_name(
-            notification.get(
-                "telegram_token_env", "WEBMONITOR_TELEGRAM_BOT_TOKEN"
-            ),
+            notification.get("telegram_token_env", "WEBMONITOR_TELEGRAM_BOT_TOKEN"),
             "notification.telegram_token_env",
         )
         telegram_chat_id_env = _environment_variable_name(
@@ -209,11 +207,22 @@ class MonitorSuiteConfig:
         for value in paths:
             try:
                 path = Path(value)
-                output_paths = {path.resolve(), path.with_name(path.name + ".tmp").resolve()}
+                output_paths = {
+                    path.resolve(),
+                    path.with_name(path.name + ".tmp").resolve(),
+                }
             except (OSError, RuntimeError, ValueError) as exc:
-                raise ConfigurationError("State and health paths must be valid file paths") from exc
-            if reserved & output_paths:
-                raise ConfigurationError("State, health, and configuration paths must not overlap")
+                raise ConfigurationError(
+                    "State and health paths must be valid file paths"
+                ) from exc
+            if any(
+                a == b or a in b.parents or b in a.parents
+                for a in reserved
+                for b in output_paths
+            ):
+                raise ConfigurationError(
+                    "State, health, and configuration paths must not overlap"
+                )
             reserved.update(output_paths)
 
     @classmethod
@@ -328,7 +337,7 @@ class SnapshotStore:
             if len(state_bytes) > MAX_STATE_BYTES:
                 raise MonitorError("Monitor state exceeds size limit")
             payload = json.loads(state_bytes.decode("utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, ValueError, RecursionError) as exc:
             raise MonitorError("Unable to read monitor state") from exc
 
         if not isinstance(payload, Mapping):
@@ -387,9 +396,18 @@ class WebMonitor:
     ) -> None:
         self.config = config
         self.notifier = notifier or (lambda _title, _message: None)
+        self._owns_session = session is None
         self.session = session or requests.Session()
         self.store = store or SnapshotStore(config.state_file)
         self.sleeper = sleeper
+
+    def close(self) -> None:
+        """Release owned transports; injected sessions remain caller-owned."""
+        if self._owns_session:
+            self.session.close()
+        close_notifier = getattr(self.notifier, "close", None)
+        if close_notifier is not None:
+            close_notifier()
 
     def _request_with_retry(self) -> requests.Response:
         last_exception: Optional[requests.RequestException] = None
@@ -420,7 +438,9 @@ class WebMonitor:
                 if response is not None:
                     response.close()
                 last_exception = exc
-                status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                status_code = getattr(
+                    getattr(exc, "response", None), "status_code", None
+                )
                 retryable = status_code is None or status_code in RETRYABLE_STATUS_CODES
                 if not retryable or attempt >= self.config.max_attempts:
                     break
@@ -448,7 +468,9 @@ class WebMonitor:
             if declared_length:
                 try:
                     if int(declared_length) > self.config.max_response_bytes:
-                        raise MonitorError("HTTP response exceeded configured size limit")
+                        raise MonitorError(
+                            "HTTP response exceeded configured size limit"
+                        )
                 except ValueError:
                     pass
 
@@ -546,7 +568,7 @@ def _load_json_mapping(path: str) -> Mapping[str, object]:
         payload = json.loads(config_bytes.decode("utf-8"))
     except FileNotFoundError:
         raise
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise ConfigurationError("Unable to read configuration file") from exc
 
     if not isinstance(payload, Mapping):
@@ -573,7 +595,7 @@ def _number(value: object, field_name: str) -> float:
         raise ConfigurationError(f"{field_name} must be a finite number")
     try:
         parsed = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ConfigurationError(f"{field_name} must be a finite number") from exc
     if not math.isfinite(parsed):
         raise ConfigurationError(f"{field_name} must be a finite number")
@@ -589,7 +611,10 @@ def _bounded_int(value: object, field_name: str, minimum: int, maximum: int) -> 
     if isinstance(value, int):
         parsed = value
     elif isinstance(value, str) and value.strip().isdigit():
-        parsed = int(value.strip())
+        try:
+            parsed = int(value.strip())
+        except ValueError as exc:
+            raise ConfigurationError(f"{field_name} must be a bounded integer") from exc
     else:
         raise ConfigurationError(
             f"{field_name} must be an integer between {minimum} and {maximum}"
@@ -605,7 +630,9 @@ def _bounded_int(value: object, field_name: str, minimum: int, maximum: int) -> 
 def _environment_variable_name(value: object, field_name: str) -> str:
     name = str(value).strip()
     if not _ENV_NAME_PATTERN.fullmatch(name):
-        raise ConfigurationError(f"{field_name} must be a valid environment variable name")
+        raise ConfigurationError(
+            f"{field_name} must be a valid environment variable name"
+        )
     return name
 
 
