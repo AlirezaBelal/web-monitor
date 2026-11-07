@@ -63,6 +63,70 @@ try {
     });
     await page.goto(url, { waitUntil: "networkidle" });
     assert.equal(await page.locator(".target").count(), 3);
+    assert.match(
+      await page.locator(".hero").textContent(),
+      /Web Monitor.*Python software/s,
+    );
+    assert.equal(
+      await page.locator(".hero .button.primary").textContent(),
+      "Get Started",
+    );
+    assert.equal(
+      await page.locator(".hero .button.primary").getAttribute("href"),
+      "#install",
+    );
+    for (const a of await page.locator('a[href^="#"]').all()) {
+      const id = await a.getAttribute("href");
+      assert(await page.locator(id).count(), "broken anchor " + id);
+    }
+    assert(
+      await page.evaluate(
+        () =>
+          document
+            .querySelector("#install")
+            .compareDocumentPosition(
+              document.querySelector("#compare-workbench"),
+            ) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    );
+    await page.locator(".hero .button.primary").click();
+    assert.equal(new URL(page.url()).hash, "#install");
+    assert(await page.locator("#install-title").isVisible());
+    assert(
+      (await page.locator("#install").textContent()).includes(
+        ".\\.venv\\Scripts\\Activate.ps1",
+      ),
+    );
+    const mac = page.getByText("macOS & Linux", { exact: true });
+    await mac.focus();
+    await page.keyboard.press("Enter");
+    assert(
+      (await page.locator(".os-guide").nth(1).getAttribute("open")) !== null,
+    );
+    assert(
+      (await page.locator(".os-guide").nth(1).textContent()).includes(
+        "source .venv/bin/activate",
+      ),
+    );
+    await mac.click();
+    await page.locator(".walkthrough summary").click();
+    assert(
+      (await page.locator(".walkthrough").textContent()).includes(
+        "python main.py --config config.json --validate-config",
+      ),
+    );
+    assert(
+      (await page.locator(".walkthrough").textContent()).includes(
+        "python main.py --config config.json --once",
+      ),
+    );
+    await page.locator(".walkthrough summary").click();
+    await page.goto(url, { waitUntil: "networkidle" });
+    await page.screenshot({
+      path: out + "/arrival-" + width + ".png",
+      fullPage: true,
+    });
+
     await page.keyboard.press("Tab");
     assert.equal(
       await page.locator(":focus").textContent(),
@@ -169,9 +233,13 @@ try {
     await cycle(2);
     await cycle(3);
     await cycle(4);
-    await page.locator("summary").focus();
+    await page.locator("#compare-workbench summary").focus();
     await page.keyboard.press("Enter");
-    assert((await page.locator("details").getAttribute("open")) !== null);
+    assert(
+      (await page
+        .locator("#compare-workbench details")
+        .getAttribute("open")) !== null,
+    );
     assert(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -227,7 +295,7 @@ try {
       })),
       [],
     );
-    await page.locator("summary").click();
+    await page.locator("#compare-workbench summary").click();
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({
       path: `${out}/product-${width}.png`,
