@@ -26,17 +26,24 @@ def report_result(
 
 def build_monitors(suite: MonitorSuiteConfig, desktop_override: bool):
     show_name = len(suite.targets) > 1
-    return [
-        WebMonitor(
-            config=target,
-            notifier=build_notifier(
-                target,
-                desktop_override=desktop_override,
-                show_name=show_name,
-            ),
-        )
-        for target in suite.targets
-    ]
+    monitors = []
+    try:
+        for target in suite.targets:
+            monitors.append(
+                WebMonitor(
+                    config=target,
+                    notifier=build_notifier(
+                        target,
+                        desktop_override=desktop_override,
+                        show_name=show_name,
+                    ),
+                )
+            )
+    except BaseException:
+        for monitor in monitors:
+            monitor.close()
+        raise
+    return monitors
 
 
 def run_checks(monitors, show_name: bool) -> tuple[int, list[HealthRecord]]:
@@ -111,6 +118,7 @@ def main() -> int:
         help="Override configured notification backends with desktop notifications",
     )
     args = parser.parse_args()
+    monitors = []
 
     try:
         suite = MonitorSuiteConfig.from_file(args.config)
@@ -148,6 +156,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("Monitoring stopped.")
         return 0
+    finally:
+        for monitor in monitors:
+            monitor.close()
 
 
 if __name__ == "__main__":

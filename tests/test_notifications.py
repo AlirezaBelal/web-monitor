@@ -1,4 +1,5 @@
 import unittest
+import json
 
 import requests
 
@@ -15,6 +16,13 @@ class FakeResponse:
     def __init__(self, status_code=204, accepted=True):
         self.status_code = status_code
         self.accepted = accepted
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+    def iter_content(self, chunk_size=4096):
+        yield json.dumps({"ok": self.accepted}).encode()
 
     def json(self):
         return {"ok": self.accepted}

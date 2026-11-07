@@ -7,6 +7,7 @@ to tracked configuration or health/state files.
 from __future__ import annotations
 
 import os
+import json
 from typing import Mapping, Optional
 
 import requests
@@ -16,6 +17,23 @@ from web_monitor import ConfigurationError, MonitorConfig, validate_http_url
 
 class NotificationDeliveryError(RuntimeError):
     """Raised when a configured notification backend cannot deliver an alert."""
+
+
+MAX_ACK_BYTES = 16_384
+
+
+def _telegram_accepted(response: requests.Response) -> bool:
+    """Read a bounded acknowledgement; never retain an arbitrary response body."""
+    body = bytearray()
+    for chunk in response.iter_content(chunk_size=4096):
+        if len(body) + len(chunk) > MAX_ACK_BYTES:
+            return False
+        body.extend(chunk)
+    try:
+        payload = json.loads(body)
+        return isinstance(payload, dict) and payload.get("ok") is True
+    except (ValueError, UnicodeError, RecursionError):
+        return False
 
 
 class WebhookNotifier:
@@ -31,7 +49,12 @@ class WebhookNotifier:
         self.url = validate_http_url(url, "webhook URL")
         self.target_name = target_name
         self.timeout_seconds = timeout_seconds
+        self._owns_session = session is None
         self.session = session or requests.Session()
+
+    def close(self) -> None:
+        if self._owns_session:
+            self.session.close()
 
     def __call__(self, title: str, message: str) -> None:
         payload = {
@@ -40,12 +63,14 @@ class WebhookNotifier:
             "title": title,
             "message": message,
         }
+        response = None
         try:
             response = self.session.post(
                 self.url,
                 json=payload,
                 timeout=self.timeout_seconds,
                 allow_redirects=False,
+                stream=True,
             )
             response.raise_for_status()
             if not 200 <= response.status_code < 300:
@@ -54,6 +79,9 @@ class WebhookNotifier:
             raise NotificationDeliveryError(
                 "Webhook notification delivery failed"
             ) from exc
+        finally:
+            if response is not None:
+                response.close()
 
 
 class TelegramNotifier:
@@ -78,24 +106,28 @@ class TelegramNotifier:
             raise ConfigurationError("Telegram chat ID environment variable is empty")
         self.target_name = target_name
         self.timeout_seconds = timeout_seconds
+        self._owns_session = session is None
         self.session = session or requests.Session()
+
+    def close(self) -> None:
+        if self._owns_session:
+            self.session.close()
 
     def __call__(self, title: str, message: str) -> None:
         text = f"[{self.target_name}] {title}\n{message}"
+        response = None
         try:
             response = self.session.post(
                 self._url,
                 json={"chat_id": self.chat_id, "text": text},
                 timeout=self.timeout_seconds,
                 allow_redirects=False,
+                stream=True,
             )
             response.raise_for_status()
             if not 200 <= response.status_code < 300:
                 raise NotificationDeliveryError("Telegram notification delivery failed")
-            try:
-                accepted = response.json().get("ok") is True
-            except (ValueError, AttributeError, TypeError):
-                accepted = False
+            accepted = _telegram_accepted(response)
             if not accepted:
                 raise NotificationDeliveryError("Telegram notification delivery failed")
         except requests.RequestException as exc:
@@ -103,6 +135,9 @@ class TelegramNotifier:
             raise NotificationDeliveryError(
                 "Telegram notification delivery failed"
             ) from exc
+        finally:
+            if response is not None:
+                response.close()
 
 
 def build_notifier(

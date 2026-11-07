@@ -52,7 +52,7 @@ source .venv/bin/activate
 Windows PowerShell:
 
 ```powershell
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 ```
 
 Install core dependencies:
@@ -443,8 +443,55 @@ failure. Unknown or non-text charsets fail that target with a controlled error;
 other targets continue. HTTP timeouts apply to connect/read inactivity, not an
 absolute deadline for the complete monitoring cycle.
 
-## Live browser demo
+## Hosted browser experience
 
 [Open the GitHub Pages demo](https://alirezabelal.github.io/web-monitor/)
 
-This deterministic browser simulator demonstrates content-change detection, retry behavior, health states, and alert semantics using fixed fixtures. It makes no monitoring requests, schedules no checks, and sends no notifications.
+Compare plain-text snapshots locally or explore the clearly labeled synthetic monitoring simulation. The actual monitoring service runs in your own Python environment.
+
+## Browser-local comparison and synthetic monitoring
+
+The [Signal Ledger website](https://alirezabelal.github.io/web-monitor/) offers two
+separate experiences:
+
+- **Real local computation:** edit two plain-text snapshots, normalize whitespace,
+  and inspect a changed-span summary. Each input is limited to 20,000 UTF-16 code
+  units; output previews to 500. The algorithm collapses JavaScript whitespace
+  runs, trims both ends, then compares exact strings. It does not parse HTML,
+  apply selectors, or claim parity with Beautiful Soup extraction. A linear
+  common-prefix/suffix summary can group multiple edits into one span.
+- **Guided simulation:** fictional targets demonstrate baselines, unchanged
+  content, exhausted request retries, recovery, content changes, delivery failure,
+  and retry-before-state-commit. Recovery is a separate event, not an alert.
+  Reset cancels and invalidates pending work. The ledger retains 60 events.
+
+The static site makes no monitoring requests, schedules no persistent checks,
+uses no analytics or persistent input storage, uploads nothing, and sends no
+notifications. `connect-src 'none'` remains enforced. Entered content is rendered
+as text and cleared on page exit. Clear inputs discards this workspace; it cannot
+erase original sources, browser extensions, downloads, or device memory.
+
+Run deterministic frontend regression tests:
+
+```bash
+node --test tests/browser_demo.test.cjs
+```
+
+The Pages workflow also runs isolated Playwright/Chromium and axe checks across
+320, 375, 390, 768, 1024, 1440, and 1920px viewports, including keyboard operation,
+reset races, comparison limits, safe rendering, recovery semantics, and network
+isolation. Browser tooling is not part of the Python application dependencies.
+
+### Notification response boundaries
+
+Webhook acknowledgements use the HTTP status without buffering the response body.
+Telegram acknowledgements are streamed with a 16 KiB decompressed body limit and
+must contain a JSON object with `"ok": true`. All notification responses are closed,
+including rejected responses and body-read failures. Owned HTTP sessions are closed
+on normal CLI exit, Ctrl+C, and partial monitor initialization failure; injected
+sessions remain the caller's responsibility. Notification failures retain the old
+digest and retry on the next check, rather than retrying delivery in the same cycle.
+
+HTTP 429 uses the configured exponential backoff; **Retry-After is not automatically
+honored**. If a target requests a longer wait, increase the configured interval or
+stop monitoring until permitted. Do not use aggressive polling to work around limits.

@@ -22,3 +22,7 @@ previous_data.txt
 .coverage
 .coverage.*
 htmlcov/
+
+evidence/
+node_modules/
+.impeccable/
