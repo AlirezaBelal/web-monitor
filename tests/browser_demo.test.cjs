@@ -144,3 +144,24 @@ test("static CSP, synthetic targets, no networking, storage or HTML injection si
   assert(definitions.every((t) => t.url.includes(".example.test")));
   assert.match(html, /maxlength="20000"/);
 });
+
+test("product presentation and installation precede optional educational tools", () => {
+  const html = fs.readFileSync("docs/index.html", "utf8");
+  const hero = html.match(/<section class="hero"[\s\S]*?<\/section>/)[0];
+  assert.match(hero, /href="#install"[\s\S]*?Get Started/);
+  assert.match(hero, /View on GitHub/);
+  assert.doesNotMatch(hero, /Try local comparison/);
+  assert(html.indexOf('id="install"') < html.indexOf('id="compare-workbench"'));
+  assert(html.indexOf('id="notifications"') < html.indexOf('id="demos"'));
+  for (const value of [
+    "Windows PowerShell",
+    "macOS &amp; Linux",
+    ".\\.venv\\Scripts\\Activate.ps1",
+    "source .venv/bin/activate",
+    "--validate-config",
+    "--once",
+    "python -m http.server 8000 --bind 127.0.0.1 --directory demo",
+  ])
+    assert(html.includes(value), value);
+  assert.match(html, /Optional educational experiences/);
+});

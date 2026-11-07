@@ -447,7 +447,7 @@ absolute deadline for the complete monitoring cycle.
 
 [Open the GitHub Pages demo](https://alirezabelal.github.io/web-monitor/)
 
-Compare plain-text snapshots locally or explore the clearly labeled synthetic monitoring simulation. The actual monitoring service runs in your own Python environment.
+The website introduces the Python product, explains its workflow and limitations, and provides an OS-specific Quick Start with a loopback tutorial. Installation is the primary path; plain-text comparison and the synthetic monitoring simulation remain optional educational experiences below the guide. Actual monitoring runs in your own Python environment.
 
 ## Browser-local comparison and synthetic monitoring
 

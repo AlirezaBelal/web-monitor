@@ -11,9 +11,9 @@
     />
     <meta
       name="description"
-      content="Web Monitor: a Python webpage change monitor. Compare two text snapshots privately in your browser and explore a clearly labeled monitoring simulation."
+      content="Install Web Monitor, a Python webpage change monitor with CSS selectors, independent targets and notifications. Follow a safe local Quick Start and explore optional browser demos."
     />
-    <title>Signal Ledger — Web Monitor &amp; Local Comparison</title>
+    <title>Web Monitor — Local Python Monitoring &amp; Quick Start</title>
     <link rel="canonical" href="https://alirezabelal.github.io/web-monitor/" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./style.css" />
@@ -23,45 +23,348 @@
     <a class="skip-link" href="#top">Skip to main content</a>
     <header>
       <a class="brand" href="#top"
-        ><span class="logo" aria-hidden="true">S</span
-        ><span translate="no">Signal Ledger<small>Web Monitor</small></span></a
+        ><span class="logo" aria-hidden="true">W</span
+        ><span translate="no">Web Monitor<small>Signal Ledger</small></span></a
       >
       <nav aria-label="Primary">
-        <a href="#compare-workbench">Compare</a><a href="#monitor">Simulate</a
-        ><a href="#install">Install</a>
+        <a href="#workflow">How it works</a><a href="#install">Quick Start</a
+        ><a href="#demos">Demos</a>
       </nav>
     </header>
     <main id="top" tabindex="-1">
       <section class="hero" aria-labelledby="title">
         <div>
-          <h1 id="title">Notice the change.<br />Understand the signal.</h1>
+          <p class="product-name">Web Monitor · Python software</p>
+          <h1 id="title">Know when a<br />webpage changes.</h1>
           <p class="lede">
-            Web Monitor checks selected webpage content with Python, detects
-            changes, and alerts you. Run it locally or on your private
-            infrastructure.
+            Check selected webpage content, detect changes, and receive
+            notifications. Run Web Monitor on your computer or infrastructure
+            you control.
           </p>
           <div class="actions">
-            <a class="button primary" href="#compare-workbench"
-              >Try local comparison ↓</a
+            <a class="button primary" href="#install">Get Started</a
             ><a
-              class="text-link"
-              href="https://github.com/AlirezaBelal/web-monitor#quick-start"
-              >Install the Python monitor ↗</a
+              class="button quiet"
+              href="https://github.com/AlirezaBelal/web-monitor"
+              >View on GitHub</a
             >
           </div>
+          <a class="demo-link" href="#demos">Explore optional browser demos</a>
         </div>
-        <aside class="instrument" aria-label="Real monitoring pipeline">
-          <p class="instrument-label">The real monitoring pipeline</p>
+        <aside class="instrument" aria-label="Local Python execution">
+          <p class="instrument-label">Your process. Your monitoring.</p>
+          <p>Run a single check:</p>
+          <pre
+            class="command"
+          ><code>python main.py --config config.json --once</code></pre>
           <ol>
-            <li><span>01</span> Fetch &amp; retry</li>
-            <li><span>02</span> Select &amp; normalize</li>
-            <li><span>03</span> Hash &amp; compare</li>
-            <li><span>04</span> Notify, then commit state</li>
+            <li><span>First success</span> Record a baseline</li>
+            <li><span>Same content</span> Stay quiet</li>
+            <li><span>Changed content</span> Notify, then save</li>
           </ol>
           <p>
-            Python does the monitoring.<br />This website helps you evaluate it.
+            Continuous checks require a running Python process. This website
+            does not monitor URLs.
           </p>
         </aside>
+      </section>
+      <section
+        id="workflow"
+        class="product-section"
+        aria-labelledby="workflow-title"
+      >
+        <div class="section-heading">
+          <h2 id="workflow-title">A focused path from page to signal.</h2>
+          <p class="section-intro">
+            Choose the content you care about. Keep control of the check, the
+            destination, and the stored state.
+          </p>
+        </div>
+        <ol class="pipeline">
+          <li>
+            <strong>Fetch</strong
+            ><span
+              >HTTP request with timeouts, response limits and
+              retry/backoff.</span
+            >
+          </li>
+          <li>
+            <strong>Select</strong
+            ><span>CSS selectors isolate the relevant elements.</span>
+          </li>
+          <li>
+            <strong>Normalize &amp; hash</strong
+            ><span
+              >Extract text or serialized HTML; calculate its SHA-256
+              digest.</span
+            >
+          </li>
+          <li>
+            <strong>Compare</strong
+            ><span
+              >Compare with the last committed digest for this target.</span
+            >
+          </li>
+          <li>
+            <strong>Notify</strong
+            ><span
+              >Send the configured alert before committing a changed
+              digest.</span
+            >
+          </li>
+        </ol>
+        <p class="workflow-note">
+          The first successful check establishes a quiet baseline. State stores
+          digests and an identifier for the target definition, not scraped
+          content. A changed target definition establishes a new baseline.
+        </p>
+      </section>
+      <section
+        id="capabilities"
+        class="product-section use-cases"
+        aria-labelledby="features-title"
+      >
+        <div>
+          <h2 id="features-title">Watch the part<br />that matters.</h2>
+          <p>
+            Useful for authorized public announcements, job posting pages,
+            registration information, product details, documentation, and
+            release or status pages.
+          </p>
+          <p class="caveat">
+            A changed digest means selected content changed. It does not
+            interpret a price drop, a new vacancy, or an available seat for you.
+          </p>
+        </div>
+        <dl class="feature-list">
+          <div>
+            <dt>Independent targets</dt>
+            <dd>
+              Monitor one page or up to 64 targets in a process. Each keeps its
+              own state; one failure does not block the others.
+            </dd>
+          </div>
+          <div>
+            <dt>Text or HTML</dt>
+            <dd>
+              Use a CSS selector to focus extraction. Text comparison can ignore
+              markup changes; HTML comparison can detect attribute changes.
+            </dd>
+          </div>
+          <div>
+            <dt>Controlled operation</dt>
+            <dd>
+              Configure polling intervals, timeouts, response limits and
+              retries. Redirects are not followed; transient failures use
+              exponential backoff.
+            </dd>
+          </div>
+          <div>
+            <dt>Inspectable local output</dt>
+            <dd>
+              Digest-only state and privacy-safe health JSON. Run from a
+              terminal, Docker, or a hardened systemd service.
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <section id="install" class="quickstart" aria-labelledby="install-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Get started with the real software</p>
+            <h2 id="install-title">Your first check, on your machine.</h2>
+          </div>
+          <p class="section-intro">
+            Python 3.10–3.14 verified in CI. Start with the loopback example: no
+            external target or notification credentials needed.
+          </p>
+        </div>
+        <div class="setup-grid">
+          <div class="setup-step">
+            <h3>1. Install &amp; create configuration</h3>
+            <p>
+              Use a fresh checkout and a private working directory. Choose the
+              commands for your shell.
+            </p>
+            <details class="os-guide" open>
+              <summary>Windows PowerShell</summary>
+              <pre
+                class="command"
+              ><code>git clone https://github.com/AlirezaBelal/web-monitor.git
+cd web-monitor
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -c "import shutil; shutil.copyfile('config.example.json', 'config.json')"</code></pre>
+            </details>
+            <details class="os-guide">
+              <summary>macOS &amp; Linux</summary>
+              <pre
+                class="command"
+              ><code>git clone https://github.com/AlirezaBelal/web-monitor.git
+cd web-monitor
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -c "import shutil; shutil.copyfile('config.example.json', 'config.json')"</code></pre>
+            </details>
+            <p class="small-note">
+              If PowerShell blocks activation, use
+              <code>.\.venv\Scripts\python.exe</code> in place of
+              <code>python</code> for the commands below; activation is
+              optional.
+            </p>
+          </div>
+          <div class="setup-step">
+            <h3>2. Serve a local page</h3>
+            <p>Create a small HTML fixture:</p>
+            <pre
+              class="command"
+            ><code>python -c "from pathlib import Path; Path('demo').mkdir(exist_ok=True); Path('demo/index.html').write_text('&lt;main&gt;Initial value&lt;/main&gt;', encoding='utf-8')"</code></pre>
+            <p>
+              In a <strong>second terminal</strong>, from the repository
+              directory, keep this server running:
+            </p>
+            <pre
+              class="command"
+            ><code>python -m http.server 8000 --bind 127.0.0.1 --directory demo</code></pre>
+            <p>
+              The example configuration already watches
+              <code>http://127.0.0.1:8000/</code> with the selector
+              <code>main</code> and console notifications.
+            </p>
+          </div>
+        </div>
+        <details class="walkthrough">
+          <summary>3. Run the local walkthrough</summary>
+          <p>Back in the first terminal, validate and run two checks:</p>
+          <pre
+            class="command"
+          ><code>python main.py --config config.json --validate-config
+python main.py --config config.json --once
+python main.py --config config.json --once</code></pre>
+          <p>
+            The first successful check reports <strong>baseline</strong>; the
+            second reports <strong>unchanged</strong>. Update the local page and
+            check again:
+          </p>
+          <pre
+            class="command"
+          ><code>python -c "from pathlib import Path; Path('demo/index.html').write_text('&lt;main&gt;Updated value&lt;/main&gt;', encoding='utf-8')"
+python main.py --config config.json --once</code></pre>
+          <p>
+            You should see <strong>changed</strong> and a console alert. Now
+            edit your local <code>config.json</code> with an authorized target,
+            CSS selector, comparison mode and reasonable interval. Validate
+            again, then keep Python running for continuous checks:
+          </p>
+          <pre
+            class="command"
+          ><code>python main.py --config config.json</code></pre>
+          <p>
+            Stop with <kbd>Ctrl+C</kbd>. No checks run after the process stops.
+            Rerunning the tutorial with existing state may report a change or
+            unchanged instead of a first baseline.
+          </p>
+        </details>
+        <p class="documentation-links">
+          <a
+            href="https://github.com/AlirezaBelal/web-monitor#multi-target-configuration"
+            >Configuration reference</a
+          ><a href="https://github.com/AlirezaBelal/web-monitor#quick-start"
+            >Full installation guide</a
+          ><a
+            href="https://github.com/AlirezaBelal/web-monitor/blob/master/SECURITY.md"
+            >Security guidance</a
+          >
+        </p>
+      </section>
+      <section
+        id="notifications"
+        class="product-section use-cases"
+        aria-labelledby="notifications-title"
+      >
+        <div>
+          <h2 id="notifications-title">
+            Route the alert.<br />Keep the credentials private.
+          </h2>
+          <p>
+            Console output works by default. Optional desktop alerts need
+            <code>requirements-desktop.txt</code>. Webhook and Telegram delivery
+            run from your Python environment, never from this site.
+          </p>
+          <p>
+            For continuous monitoring, keep your computer or private server
+            available and the process running.
+          </p>
+          <a
+            href="https://github.com/AlirezaBelal/web-monitor#notification-backends"
+            >Notification setup &amp; delivery semantics</a
+          >
+        </div>
+        <div class="notification-details">
+          <details>
+            <summary>Configure Webhook or Telegram</summary>
+            <p>
+              Use <code>notification.backend</code> set to
+              <code>webhook</code> or <code>telegram</code>. Configuration
+              stores variable names, while protected runtime environment
+              variables hold the actual values.
+            </p>
+            <pre class="command"><code>WEBMONITOR_WEBHOOK_URL
+WEBMONITOR_TELEGRAM_BOT_TOKEN
+WEBMONITOR_TELEGRAM_CHAT_ID</code></pre>
+            <p>
+              Never commit credentials or secret-bearing destinations. Failed
+              delivery retains the old digest and retries on the next check;
+              rare duplicates are possible.
+            </p>
+          </details>
+          <details>
+            <summary>Deploy with Docker</summary>
+            <p>
+              The documented image runs as a non-root user. Build it locally:
+            </p>
+            <pre class="command"><code>docker build -t webmonitor .</code></pre>
+            <p>
+              Use the tracked container configuration, a read-only configuration
+              mount, protected runtime secrets and a persistent
+              <code>/data</code> volume. Container loopback is separate from
+              your host’s loopback.
+            </p>
+            <a
+              href="https://github.com/AlirezaBelal/web-monitor#docker-deployment"
+              >Verified Docker run and validation commands</a
+            >
+          </details>
+          <details>
+            <summary>Run as a systemd service</summary>
+            <p>
+              The tracked unit uses a dedicated account, restrictive umask and
+              sandboxing. Keep configuration in <code>/etc/webmonitor</code>,
+              secrets in a protected environment file and state in
+              <code>/var/lib/webmonitor</code>.
+            </p>
+            <a
+              href="https://github.com/AlirezaBelal/web-monitor#systemd-deployment"
+              >systemd setup and deployment files</a
+            >
+          </details>
+        </div>
+      </section>
+      <section id="demos" class="demo-intro" aria-labelledby="demos-title">
+        <div>
+          <p class="section-label">Optional educational experiences</p>
+          <h2 id="demos-title">Explore the concepts.</h2>
+          <p>
+            These browser tools help explain comparison and failure behavior.
+            They do not replace installing and running the Python monitor.
+          </p>
+        </div>
+        <div class="actions">
+          <a href="#compare-workbench">Local text comparison</a
+          ><a href="#monitor">Synthetic monitoring simulation</a>
+        </div>
       </section>
       <section
         id="compare-workbench"
@@ -256,52 +559,55 @@
         </dl>
       </section>
       <section
-        id="install"
-        class="installation"
-        aria-labelledby="install-title"
+        id="limitations"
+        class="product-section limitations"
+        aria-labelledby="limits-title"
       >
+        <h2 id="limits-title">Clear boundaries. Responsible checks.</h2>
+        <ul>
+          <li>
+            Real monitoring requires a running Python process. This static
+            website has no hosted backend, URL-fetching service, scheduler, or
+            multi-user dashboard.
+          </li>
+          <li>
+            No JavaScript webpage rendering, automatic login/session workflows,
+            or historical scraped-content archive. Only selected server-returned
+            content is compared; visible browser changes may be missed.
+          </li>
+          <li>
+            Monitor only authorized pages. Respect site terms, privacy and
+            reasonable polling rates. HTTP 429 uses configured backoff;
+            Retry-After is not automatically honored.
+          </li>
+          <li>
+            Protect local configuration, notification destinations, state
+            directories and environment secrets. Health output excludes URLs and
+            scraped content.
+          </li>
+        </ul>
+      </section>
+      <section class="final-action" aria-labelledby="final-title">
         <div>
-          <p class="section-label">Run the real application</p>
-          <h2 id="install-title">Your targets.<br />Your environment.</h2>
+          <h2 id="final-title">Make the next check deliberate.</h2>
           <p>
-            Python 3.10–3.14 verified in CI. Monitor multiple targets
-            independently, compare text or HTML with CSS selectors, and use
-            console, optional desktop, Webhook, or Telegram notifications.
+            Start locally. Choose your target. Keep the process under your
+            control.
           </p>
-          <a
-            class="button primary"
-            href="https://github.com/AlirezaBelal/web-monitor#quick-start"
-            >Read installation guide ↗</a
-          >
         </div>
-        <div class="install-notes">
-          <h3>Start with a safe local example</h3>
-          <p>
-            The README walks through a loopback HTTP server, config validation,
-            a single check, and continuous monitoring. No notification secrets
-            are needed for the console example.
-          </p>
-          <ul>
-            <li>Monitor only authorized pages and respect site terms.</li>
-            <li>
-              Use reasonable intervals. HTTP 429 may need longer waits;
-              Retry-After is not automatically honored.
-            </li>
-            <li>Keep credentials in protected environment variables.</li>
-            <li>
-              State stores digests; health output excludes URLs and scraped
-              content.
-            </li>
-          </ul>
-          <a href="https://github.com/AlirezaBelal/web-monitor"
-            >View source &amp; deployment examples ↗</a
+        <div class="actions">
+          <a class="button primary" href="#install">Get Started</a
+          ><a
+            class="button quiet"
+            href="https://github.com/AlirezaBelal/web-monitor"
+            >View on GitHub</a
           >
         </div>
       </section>
     </main>
     <footer>
       <span>Signal Ledger · Web Monitor</span
-      ><span>Static website. Local computation. Honest boundaries.</span
+      ><span>Installable Python software · Static product guide</span
       ><a href="https://alirezabelal.github.io/work/lab/web-monitor/"
         >Project overview ↗</a
       >
