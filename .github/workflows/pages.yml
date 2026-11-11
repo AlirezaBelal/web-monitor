@@ -32,7 +32,7 @@ jobs:
         run: node "$RUNNER_TEMP/monitor-qa/run.mjs"
       - name: Preserve browser evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: monitor-browser-qa
           path: evidence/
